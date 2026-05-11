@@ -2,3 +2,4 @@ langchain
 langchain-openai
 langchain-text-splitters
 python-dotenv
+sentence-transformers
