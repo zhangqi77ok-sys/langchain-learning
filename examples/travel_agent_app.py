@@ -1,6 +1,7 @@
 """带工具的最小旅行助手示例。"""
 
 import os
+import sys
 
 from dotenv import load_dotenv
 from langchain.agents import create_agent
@@ -53,12 +54,18 @@ def main() -> None:
         system_prompt="你是一名简洁清晰的旅行助手，必要时调用工具后再回答。",
     )
 
+    question = " ".join(sys.argv[1:]).strip()
+    if not question:
+        question = input("请输入你的旅行问题：").strip()
+    if not question:
+        raise ValueError("问题不能为空")
+
     result = agent.invoke(
         {
             "messages": [
                 {
                     "role": "user",
-                    "content": "我后天去深圳，请告诉我天气情况，并给一个简短的出行建议。",
+                    "content": question,
                 }
             ]
         }
