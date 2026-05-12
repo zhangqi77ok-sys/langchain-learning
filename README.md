@@ -18,6 +18,7 @@
 6. Agent
 7. Memory
 8. Streaming
+9. 小整合项目
 
 ## 示例目录
 
@@ -60,6 +61,11 @@
 
 - [`examples/streaming_demo.py`](</E:/langchain-learning/examples/streaming_demo.py>)：流式输出最小示例
 
+### 9. 小整合项目
+
+- [`notes/langchain_intro.txt`](</E:/langchain-learning/notes/langchain_intro.txt>)：本地知识库文本
+- [`examples/local_kb_qa_app.py`](</E:/langchain-learning/examples/local_kb_qa_app.py>)：可交互、可流式输出的最小本地知识库问答程序
+
 ## 环境准备
 
 1. 创建虚拟环境
@@ -87,6 +93,12 @@ LOCAL_EMBEDDING_MODEL=all-MiniLM-L6-v2
 
 ```powershell
 .\.venv\Scripts\python examples\rag_qa_demo.py
+```
+
+例如运行本地知识库问答小项目：
+
+```powershell
+.\.venv\Scripts\python examples\local_kb_qa_app.py
 ```
 
 ## 当前说明
