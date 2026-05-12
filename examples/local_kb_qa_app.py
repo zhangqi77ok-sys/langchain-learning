@@ -68,8 +68,11 @@ def main() -> None:
     )
     vector_store = InMemoryVectorStore(embeddings)
     vector_store.add_documents(documents)
-
-    question = "LangChain 在 RAG 场景里主要起什么作用？"
+    """ 改 question 为 Tool Calling 的核心思想是什么？
+        改 question 为 Memory 是怎么实现的？"""
+    question = input("请输入你的问题：").strip()
+    if not question:
+        raise ValueError("问题不能为空")
     retrieved_docs = vector_store.similarity_search(question, k=3)
     context = build_context(retrieved_docs)
 
