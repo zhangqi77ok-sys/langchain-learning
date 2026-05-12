@@ -65,6 +65,7 @@
 
 - [`notes/langchain_intro.txt`](</E:/langchain-learning/notes/langchain_intro.txt>)：本地知识库文本
 - [`examples/local_kb_qa_app.py`](</E:/langchain-learning/examples/local_kb_qa_app.py>)：可交互、可流式输出的最小本地知识库问答程序
+- [`examples/travel_agent_app.py`](</E:/langchain-learning/examples/travel_agent_app.py>)：支持命令行参数输入的最小旅行助手
 
 ## 环境准备
 
@@ -99,6 +100,12 @@ LOCAL_EMBEDDING_MODEL=all-MiniLM-L6-v2
 
 ```powershell
 .\.venv\Scripts\python examples\local_kb_qa_app.py
+```
+
+例如运行旅行助手小项目：
+
+```powershell
+.\.venv\Scripts\python examples\travel_agent_app.py "我明天去上海，请告诉我天气情况，并给一个简短的出行建议。"
 ```
 
 ## 当前说明
