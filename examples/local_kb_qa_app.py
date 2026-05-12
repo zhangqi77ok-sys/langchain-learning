@@ -92,9 +92,6 @@ def main() -> None:
         base_url=os.getenv("OPENAI_BASE_URL"),
     )
     chain = prompt | model
-
-    # 这里串起本地知识库问答全流程，目的是让你看到一个最小可运行应用。
-    response = chain.invoke({"context": context, "question": question})
     print("question:")
     print(question)
     print("-" * 20)
@@ -102,7 +99,11 @@ def main() -> None:
     print(context)
     print("-" * 20)
     print("answer:")
-    print(response.content)
+    # 这里改成流式输出，目的是让你看到知识库回答如何边生成边展示。
+    for chunk in chain.stream({"context": context, "question": question}):
+        if chunk.content:
+            print(chunk.content, end="", flush=True)
+    print()
 
 
 if __name__ == "__main__":
