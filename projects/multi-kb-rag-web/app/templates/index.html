@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: "Segoe UI", "PingFang SC", sans-serif;
+            background: linear-gradient(135deg, #f4f7fb 0%, #e8eef8 100%);
+            color: #1f2937;
+        }
+
+        .page {
+            max-width: 820px;
+            margin: 48px auto;
+            padding: 0 20px;
+        }
+
+        .card {
+            background: #ffffff;
+            border-radius: 18px;
+            padding: 32px;
+            box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
+        }
+
+        h1 {
+            margin-top: 0;
+            font-size: 32px;
+        }
+
+        p {
+            line-height: 1.7;
+            color: #4b5563;
+        }
+
+        .form {
+            margin-top: 24px;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 140px;
+            padding: 16px;
+            border: 1px solid #cbd5e1;
+            border-radius: 12px;
+            font-size: 16px;
+            resize: vertical;
+            box-sizing: border-box;
+        }
+
+        button {
+            margin-top: 16px;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 10px;
+            background: #2563eb;
+            color: #ffffff;
+            font-size: 15px;
+            cursor: pointer;
+        }
+
+        .hint {
+            margin-top: 18px;
+            font-size: 14px;
+            color: #64748b;
+        }
+    </style>
+</head>
+<body>
+    <main class="page">
+        <section class="card">
+            <h1>多知识库问答 Web 项目</h1>
+            <p>这是项目的最小首页版本。当前页面先只提供 Web 骨架，下一步再接入真正的 RAG 问答接口。</p>
+
+            <div class="form">
+                <textarea id="questionInput" placeholder="例如：RAG 的基本流程是什么？"></textarea>
+                <button id="askButton" type="button">提交问题</button>
+            </div>
+
+            <div id="result" style="display:none; margin-top: 28px;">
+                <h2 style="font-size: 20px; margin-bottom: 12px;">回答结果</h2>
+                <div id="answerBox" style="padding: 18px; background: #f8fafc; border-radius: 12px; line-height: 1.8;"></div>
+                <div id="sourceBox" style="margin-top: 14px; font-size: 14px; color: #475569;"></div>
+            </div>
+
+            <p id="hint" class="hint">现在已经支持在页面里发问，下一步可以继续升级交互体验。</p>
+        </section>
+    </main>
+    <script>
+        const button = document.getElementById("askButton");
+        const input = document.getElementById("questionInput");
+        const result = document.getElementById("result");
+        const answerBox = document.getElementById("answerBox");
+        const sourceBox = document.getElementById("sourceBox");
+        const hint = document.getElementById("hint");
+
+        button.addEventListener("click", async () => {
+            const question = input.value.trim();
+            if (!question) {
+                hint.textContent = "请输入问题后再提交。";
+                return;
+            }
+
+            button.disabled = true;
+            button.textContent = "思考中...";
+            hint.textContent = "正在请求后端问答接口...";
+
+            try {
+                const response = await fetch("/ask", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ question })
+                });
+
+                const data = await response.json();
+                answerBox.textContent = data.answer;
+                sourceBox.textContent = data.sources.length
+                    ? `来源文件：${data.sources.join("、")}`
+                    : "没有返回来源文件。";
+                result.style.display = "block";
+                hint.textContent = "问答完成。";
+            } catch (error) {
+                hint.textContent = "请求失败，请稍后重试。";
+            } finally {
+                button.disabled = false;
+                button.textContent = "提交问题";
+            }
+        });
+    </script>
+</body>
+</html>
