@@ -75,10 +75,22 @@ def main() -> None:
     embedding_model_name = os.getenv("OPENAI_EMBEDDING_MODEL", "all-MiniLM-L6-v2")
     embedding_model = SentenceTransformer(embedding_model_name)
 
+    print("第 1 步：读取本地知识文件")
     chunks = build_chunks()
+    print(f"切分后得到 {len(chunks)} 个片段")
+    for index, chunk in enumerate(chunks, start=1):
+        print(f"片段 {index}: {chunk.page_content}")
+    print("-" * 40)
+
+    print("第 2 步：对问题做检索")
     top_chunks = retrieve_top_k(question, chunks, embedding_model, top_k=2)
     context = "\n\n".join(chunk.page_content for chunk in top_chunks)
+    print("召回到的片段：")
+    for index, chunk in enumerate(top_chunks, start=1):
+        print(f"{index}. {chunk.page_content}")
+    print("-" * 40)
 
+    print("第 3 步：把检索结果拼进提示词")
     model = ChatOpenAI(
         model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
         api_key=get_required_env("OPENAI_API_KEY"),
@@ -86,6 +98,11 @@ def main() -> None:
     )
 
     prompt = build_prompt(question, context)
+    print("最终提示词：")
+    print(prompt)
+    print("-" * 40)
+
+    print("第 4 步：把提示词交给模型")
     response = model.invoke(prompt)
 
     print("问题：")
