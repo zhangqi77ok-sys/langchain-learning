@@ -20,3 +20,4 @@
 
 - `learning/chapter-01-basics`
 - `learning/chapter-02-prompting`
+- `learning/chapter-03-rag`
