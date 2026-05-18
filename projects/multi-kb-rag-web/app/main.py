@@ -126,7 +126,7 @@ def fuse_results(
     vector_results: list[tuple[Document, float]],
     bm25_weight: float = 0.5,
     vector_weight: float = 0.5,
-) -> list[Document]:
+) -> list[tuple[Document, float]]:
     """把两路检索结果融合后重新排序。"""
     bm25_docs = [document for document, _ in bm25_results]
     bm25_scores = [score for _, score in bm25_results]
@@ -156,7 +156,7 @@ def fuse_results(
         fused.append((document, score))
 
     fused.sort(key=lambda item: item[1], reverse=True)
-    return [document for document, _ in fused]
+    return fused
 
 
 def build_context(documents: list[Document]) -> str:
@@ -199,7 +199,16 @@ def ask_question(payload: AskRequest) -> AskResponse:
 
     bm25_results = run_bm25_search(question, documents, top_k=4)
     vector_results = run_vector_search(question, vector_store, top_k=4)
-    retrieved_docs = fuse_results(bm25_results, vector_results)[:4]
+    fused_results = fuse_results(bm25_results, vector_results)[:4]
+    best_score = fused_results[0][1] if fused_results else 0.0
+    if best_score < 0.35:
+        return AskResponse(
+            question=question,
+            answer="当前知识库里没有找到和这个问题足够相关的内容。",
+            sources=[],
+        )
+
+    retrieved_docs = [document for document, _ in fused_results]
     context = build_context(retrieved_docs)
     sources = list(dict.fromkeys(document.metadata.get("source", "unknown") for document in retrieved_docs))
 
@@ -207,7 +216,10 @@ def ask_question(payload: AskRequest) -> AskResponse:
         [
             (
                 "system",
-                "你是一名简洁清晰的知识库助手。请严格依据上下文回答，并尽量指出信息来自哪个文件。",
+                "你是一名简洁清晰的知识库助手。请严格依据上下文回答，并尽量指出信息来自哪个文件。"
+                "如果上下文和问题明显无关，或者上下文不足以支持回答，"
+                "必须直接回答：当前知识库里没有找到和这个问题足够相关的内容。"
+                "不要勉强回答，不要扩展到上下文之外的知识。",
             ),
             ("human", "上下文：\n{context}\n\n问题：\n{question}"),
         ]
