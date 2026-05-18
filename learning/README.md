@@ -22,3 +22,4 @@
 - `learning/chapter-02-prompting`
 - `learning/chapter-03-rag`
 - `learning/chapter-04-memory`
+- `learning/chapter-05-agents`
