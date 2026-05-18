@@ -11,7 +11,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.vectorstores import InMemoryVectorStore
 from langchain_openai import ChatOpenAI
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from rank_bm25 import BM25Okapi
 from sentence_transformers import SentenceTransformer
 
@@ -19,8 +19,10 @@ from sentence_transformers import SentenceTransformer
 app = FastAPI(title="rag-diagnostics-web")
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 load_dotenv(Path(__file__).resolve().parents[3] / ".env")
-REJECTION_MESSAGE = "当前知识库里没有找到和这个问题足够相关的内容。"
 
+REJECTION_MESSAGE = "当前知识库里没有找到和这个问题足够相关的内容。"
+DEFAULT_TOP_K = 3
+DEFAULT_THRESHOLD = 0.35
 
 MENU_ITEMS = [
     {
@@ -51,6 +53,8 @@ class AskRequest(BaseModel):
     """前端问答请求体。"""
 
     question: str
+    top_k: int = Field(default=DEFAULT_TOP_K, ge=1, le=6)
+    threshold: float = Field(default=DEFAULT_THRESHOLD, ge=0.0, le=1.0)
 
 
 class RecommendedMenu(BaseModel):
@@ -75,6 +79,7 @@ class Diagnostics(BaseModel):
     rejected: bool
     best_score: float
     threshold: float
+    top_k: int
     bm25_results: list[RetrievedChunk]
     vector_results: list[RetrievedChunk]
     fused_results: list[RetrievedChunk]
@@ -150,6 +155,9 @@ def normalize_scores(scores: list[float]) -> list[float]:
     min_score = min(scores)
     max_score = max(scores)
     if min_score == max_score:
+        # 所有结果同分时，说明当前检索没有拉开区分度，不应直接视为高相关。
+        if max_score <= 0:
+            return [0.0 for _ in scores]
         return [1.0 for _ in scores]
 
     return [(score - min_score) / (max_score - min_score) for score in scores]
@@ -257,7 +265,7 @@ def choose_recommended_menu(question: str, sources: list[str]) -> RecommendedMen
     return RecommendedMenu(key=item["key"], title=item["title"], url=item["url"])
 
 
-def build_recommended_reason(question: str, sources: list[str], recommended_menu: RecommendedMenu) -> str:
+def build_recommended_reason(sources: list[str], recommended_menu: RecommendedMenu) -> str:
     """解释为什么推荐这个菜单。"""
     if sources:
         first_source = sources[0]
@@ -275,6 +283,8 @@ def read_root(request: Request):
         context={
             "title": "rag-diagnostics-web",
             "menus": MENU_ITEMS,
+            "default_top_k": DEFAULT_TOP_K,
+            "default_threshold": DEFAULT_THRESHOLD,
         },
     )
 
@@ -283,11 +293,15 @@ def read_root(request: Request):
 def ask_question(payload: AskRequest) -> AskResponse:
     """执行问答，并把内部诊断信息一并返回给前端。"""
     question = payload.question.strip()
+    top_k = payload.top_k
+    threshold = payload.threshold
+
     if not question:
         empty_diagnostics = Diagnostics(
             rejected=False,
             best_score=0.0,
-            threshold=0.35,
+            threshold=threshold,
+            top_k=top_k,
             bm25_results=[],
             vector_results=[],
             fused_results=[],
@@ -310,11 +324,10 @@ def ask_question(payload: AskRequest) -> AskResponse:
     vector_store = InMemoryVectorStore(embeddings)
     vector_store.add_documents(documents)
 
-    bm25_results = run_bm25_search(question, documents, top_k=4)
-    vector_results = run_vector_search(question, vector_store, top_k=4)
-    fused_results = fuse_results(bm25_results, vector_results)[:4]
+    bm25_results = run_bm25_search(question, documents, top_k=top_k)
+    vector_results = run_vector_search(question, vector_store, top_k=top_k)
+    fused_results = fuse_results(bm25_results, vector_results)[:top_k]
     best_score = fused_results[0][1] if fused_results else 0.0
-    threshold = 0.35
 
     retrieved_docs = [document for document, _ in fused_results]
     context = build_context(retrieved_docs)
@@ -328,6 +341,7 @@ def ask_question(payload: AskRequest) -> AskResponse:
             rejected=True,
             best_score=best_score,
             threshold=threshold,
+            top_k=top_k,
             bm25_results=convert_to_chunks(bm25_results),
             vector_results=convert_to_chunks(vector_results),
             fused_results=convert_to_chunks(fused_results),
@@ -338,7 +352,7 @@ def ask_question(payload: AskRequest) -> AskResponse:
             answer=REJECTION_MESSAGE,
             sources=sources,
             recommended_menu=recommended_menu,
-            recommended_reason=build_recommended_reason(question, [], recommended_menu),
+            recommended_reason=build_recommended_reason([], recommended_menu),
             diagnostics=diagnostics,
         )
 
@@ -348,7 +362,7 @@ def ask_question(payload: AskRequest) -> AskResponse:
                 "system",
                 "你是一名简洁清晰的知识库助手。请严格依据上下文回答，并尽量指出信息来自哪个文件。"
                 "如果上下文和问题明显无关，或者上下文不足以支持回答，"
-                "必须直接回答：当前知识库里没有找到和这个问题足够相关的内容。"
+                f"必须直接回答：{REJECTION_MESSAGE}"
                 "不要勉强回答，不要扩展到上下文之外的知识。",
             ),
             ("human", "上下文：\n{context}\n\n问题：\n{question}"),
@@ -371,6 +385,7 @@ def ask_question(payload: AskRequest) -> AskResponse:
             rejected=True,
             best_score=best_score,
             threshold=threshold,
+            top_k=top_k,
             bm25_results=convert_to_chunks(bm25_results),
             vector_results=convert_to_chunks(vector_results),
             fused_results=convert_to_chunks(fused_results),
@@ -381,7 +396,7 @@ def ask_question(payload: AskRequest) -> AskResponse:
             answer=answer_text,
             sources=sources,
             recommended_menu=recommended_menu,
-            recommended_reason=build_recommended_reason(question, [], recommended_menu),
+            recommended_reason=build_recommended_reason([], recommended_menu),
             diagnostics=diagnostics,
         )
 
@@ -390,6 +405,7 @@ def ask_question(payload: AskRequest) -> AskResponse:
         rejected=False,
         best_score=best_score,
         threshold=threshold,
+        top_k=top_k,
         bm25_results=convert_to_chunks(bm25_results),
         vector_results=convert_to_chunks(vector_results),
         fused_results=convert_to_chunks(fused_results),
@@ -400,6 +416,6 @@ def ask_question(payload: AskRequest) -> AskResponse:
         answer=answer_text,
         sources=sources,
         recommended_menu=recommended_menu,
-        recommended_reason=build_recommended_reason(question, sources, recommended_menu),
+        recommended_reason=build_recommended_reason(sources, recommended_menu),
         diagnostics=diagnostics,
     )

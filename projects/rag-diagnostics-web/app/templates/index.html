@@ -71,6 +71,28 @@
             box-sizing: border-box;
         }
 
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(120px, 180px));
+            gap: 16px;
+            margin-top: 16px;
+        }
+
+        .control label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 14px;
+            color: #475569;
+        }
+
+        .control input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 10px;
+            box-sizing: border-box;
+        }
+
         button {
             margin-top: 16px;
             padding: 12px 20px;
@@ -191,8 +213,20 @@
                 <p>这个页面专门把 RAG 的内部过程展示出来，让你能看懂“为什么这样回答”。</p>
 
                 <textarea id="questionInput" placeholder="例如：什么是 RAG？"></textarea>
+
+                <div class="controls">
+                    <div class="control">
+                        <label for="topKInput">top_k</label>
+                        <input id="topKInput" type="number" min="1" max="6" value="{{ default_top_k }}">
+                    </div>
+                    <div class="control">
+                        <label for="thresholdInput">threshold</label>
+                        <input id="thresholdInput" type="number" min="0" max="1" step="0.01" value="{{ default_threshold }}">
+                    </div>
+                </div>
+
                 <button id="askButton" type="button">提交问题</button>
-                <p id="hint" class="hint">先问一个相关问题，再问一个明显无关的问题，对比两次诊断结果。</p>
+                <p id="hint" class="hint">你可以直接调 top_k 和 threshold，观察召回片段和拒答行为怎么变化。</p>
 
                 <div id="result" style="display:none;">
                     <div class="result-card">
@@ -240,6 +274,8 @@
     <script>
         const button = document.getElementById("askButton");
         const input = document.getElementById("questionInput");
+        const topKInput = document.getElementById("topKInput");
+        const thresholdInput = document.getElementById("thresholdInput");
         const hint = document.getElementById("hint");
         const result = document.getElementById("result");
         const answerBox = document.getElementById("answerBox");
@@ -270,6 +306,9 @@
 
         button.addEventListener("click", async () => {
             const question = input.value.trim();
+            const topK = Number(topKInput.value);
+            const threshold = Number(thresholdInput.value);
+
             if (!question) {
                 hint.textContent = "请输入问题后再提交。";
                 return;
@@ -285,7 +324,7 @@
                     headers: {
                         "Content-Type": "application/json"
                     },
-                    body: JSON.stringify({ question })
+                    body: JSON.stringify({ question, top_k: topK, threshold })
                 });
 
                 const data = await response.json();
@@ -311,6 +350,7 @@
                 }
 
                 diagnosticsSummary.innerHTML = `
+                    <div>本次 top_k：${data.diagnostics.top_k}</div>
                     <div>最高融合分：${data.diagnostics.best_score.toFixed(4)}</div>
                     <div>拒答阈值：${data.diagnostics.threshold.toFixed(2)}</div>
                     <div>是否拒答：${data.diagnostics.rejected ? "是" : "否"}</div>
