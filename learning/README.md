@@ -25,3 +25,4 @@
 - `learning/chapter-05-agents`
 - `learning/chapter-06-hybrid-retrieval`
 - `learning/chapter-07-langgraph`
+- `learning/chapter-08-projects`
