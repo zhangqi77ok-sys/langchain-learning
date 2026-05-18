@@ -12,6 +12,7 @@ from langchain_core.vectorstores import InMemoryVectorStore
 from langchain_openai import ChatOpenAI
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pydantic import BaseModel
+from rank_bm25 import BM25Okapi
 from sentence_transformers import SentenceTransformer
 
 
@@ -78,6 +79,86 @@ def load_knowledge_base(directory_path: Path) -> list[Document]:
     return documents
 
 
+def tokenize(text: str) -> list[str]:
+    """把文本切成适合 BM25 的最小词元。"""
+    cleaned = text.replace("，", " ").replace("。", " ").replace("、", " ")
+    return [token for token in cleaned.split() if token]
+
+
+def normalize_scores(scores: list[float]) -> list[float]:
+    """把不同检索器的分数拉到同一范围，方便融合。"""
+    if not scores:
+        return []
+
+    min_score = min(scores)
+    max_score = max(scores)
+    if min_score == max_score:
+        return [1.0 for _ in scores]
+
+    return [(score - min_score) / (max_score - min_score) for score in scores]
+
+
+def run_bm25_search(question: str, documents: list[Document], top_k: int) -> list[tuple[Document, float]]:
+    """执行一次 BM25 检索。"""
+    corpus = [tokenize(document.page_content) for document in documents]
+    bm25 = BM25Okapi(corpus)
+    scores = bm25.get_scores(tokenize(question))
+    ranked_indices = sorted(
+        range(len(scores)),
+        key=lambda index: scores[index],
+        reverse=True,
+    )[:top_k]
+    return [(documents[index], float(scores[index])) for index in ranked_indices]
+
+
+def run_vector_search(
+    question: str,
+    vector_store: InMemoryVectorStore,
+    top_k: int,
+) -> list[tuple[Document, float]]:
+    """执行一次向量检索，并保留相似度分数。"""
+    results = vector_store.similarity_search_with_score(question, k=top_k)
+    return [(document, float(score)) for document, score in results]
+
+
+def fuse_results(
+    bm25_results: list[tuple[Document, float]],
+    vector_results: list[tuple[Document, float]],
+    bm25_weight: float = 0.5,
+    vector_weight: float = 0.5,
+) -> list[Document]:
+    """把两路检索结果融合后重新排序。"""
+    bm25_docs = [document for document, _ in bm25_results]
+    bm25_scores = [score for _, score in bm25_results]
+    vector_docs = [document for document, _ in vector_results]
+    vector_scores = [score for _, score in vector_results]
+
+    normalized_bm25 = dict(
+        zip((document.page_content for document in bm25_docs), normalize_scores(bm25_scores))
+    )
+    normalized_vector = dict(
+        zip((document.page_content for document in vector_docs), normalize_scores(vector_scores))
+    )
+
+    merged_docs: list[Document] = []
+    seen_contents: set[str] = set()
+    for document in bm25_docs + vector_docs:
+        if document.page_content not in seen_contents:
+            merged_docs.append(document)
+            seen_contents.add(document.page_content)
+
+    fused: list[tuple[Document, float]] = []
+    for document in merged_docs:
+        score = (
+            normalized_bm25.get(document.page_content, 0.0) * bm25_weight
+            + normalized_vector.get(document.page_content, 0.0) * vector_weight
+        )
+        fused.append((document, score))
+
+    fused.sort(key=lambda item: item[1], reverse=True)
+    return [document for document, _ in fused]
+
+
 def build_context(documents: list[Document]) -> str:
     """把检索到的文档块拼成上下文字符串。"""
     parts: list[str] = []
@@ -116,7 +197,9 @@ def ask_question(payload: AskRequest) -> AskResponse:
     vector_store = InMemoryVectorStore(embeddings)
     vector_store.add_documents(documents)
 
-    retrieved_docs = vector_store.similarity_search(question, k=4)
+    bm25_results = run_bm25_search(question, documents, top_k=4)
+    vector_results = run_vector_search(question, vector_store, top_k=4)
+    retrieved_docs = fuse_results(bm25_results, vector_results)[:4]
     context = build_context(retrieved_docs)
     sources = list(dict.fromkeys(document.metadata.get("source", "unknown") for document in retrieved_docs))
 

@@ -1,2 +1,3 @@
 fastapi
+rank-bm25
 uvicorn
