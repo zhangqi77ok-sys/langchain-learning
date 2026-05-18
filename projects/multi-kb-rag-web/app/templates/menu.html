@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: "Segoe UI", "PingFang SC", sans-serif;
+            background: #f4f7fb;
+            color: #1f2937;
+        }
+
+        .page {
+            max-width: 980px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 260px 1fr;
+            gap: 24px;
+        }
+
+        .panel {
+            background: #ffffff;
+            border-radius: 18px;
+            padding: 24px;
+            box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
+        }
+
+        .menu-list {
+            display: grid;
+            gap: 12px;
+        }
+
+        .menu-item {
+            display: block;
+            text-decoration: none;
+            color: #1f2937;
+            padding: 14px 16px;
+            border-radius: 12px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+        }
+
+        .menu-item.active {
+            background: #eff6ff;
+            border-color: #93c5fd;
+        }
+
+        pre {
+            white-space: pre-wrap;
+            word-break: break-word;
+            line-height: 1.8;
+            font-family: "Cascadia Mono", "Consolas", monospace;
+            background: #f8fafc;
+            padding: 16px;
+            border-radius: 12px;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 16px;
+            color: #2563eb;
+            text-decoration: none;
+        }
+
+        @media (max-width: 860px) {
+            .layout {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main class="page">
+        <div class="layout">
+            <aside class="panel">
+                <h2>学习菜单</h2>
+                <nav class="menu-list">
+                    {% for item in menus %}
+                    <a class="menu-item {% if item.key == menu.key %}active{% endif %}" href="{{ item.url }}">
+                        <strong>{{ item.title }}</strong>
+                        <span>{{ item.description }}</span>
+                    </a>
+                    {% endfor %}
+                </nav>
+            </aside>
+
+            <section class="panel">
+                <a class="back-link" href="/">返回首页</a>
+                <h1>{{ menu.title }}</h1>
+                <p>{{ menu.description }}</p>
+                <pre>{{ content }}</pre>
+            </section>
+        </div>
+    </main>
+</body>
+</html>

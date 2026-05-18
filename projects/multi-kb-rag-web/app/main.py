@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.templating import Jinja2Templates
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
@@ -21,10 +21,46 @@ templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 load_dotenv(Path(__file__).resolve().parents[3] / ".env")
 
 
+MENU_ITEMS = [
+    {
+        "key": "langchain-basics",
+        "title": "LangChain 基础",
+        "url": "/menus/langchain-basics",
+        "source": "langchain_basics.txt",
+        "description": "看 LangChain 是什么、能解决什么问题。",
+    },
+    {
+        "key": "rag-basics",
+        "title": "RAG 基础",
+        "url": "/menus/rag-basics",
+        "source": "rag_basics.txt",
+        "description": "看 RAG 的流程、价值和典型使用方式。",
+    },
+    {
+        "key": "tool-agent-basics",
+        "title": "Tool / Agent 基础",
+        "url": "/menus/tool-agent-basics",
+        "source": "tool_agent_basics.txt",
+        "description": "看工具调用和 Agent 的最小核心概念。",
+    },
+]
+
+MENU_BY_KEY = {item["key"]: item for item in MENU_ITEMS}
+MENU_BY_SOURCE = {item["source"]: item for item in MENU_ITEMS}
+
+
 class AskRequest(BaseModel):
     """定义问答接口请求体。"""
 
     question: str
+
+
+class RecommendedMenu(BaseModel):
+    """定义问答后的推荐菜单信息。"""
+
+    key: str
+    title: str
+    url: str
 
 
 class AskResponse(BaseModel):
@@ -33,10 +69,11 @@ class AskResponse(BaseModel):
     question: str
     answer: str
     sources: list[str]
+    recommended_menu: RecommendedMenu | None
 
 
 def get_required_env(name: str) -> str:
-    """读取必需环境变量，缺失时直接报错。"""
+    """读取必须存在的环境变量，缺失时直接报错。"""
     value = os.getenv(name)
     if not value:
         raise ValueError(f"缺少环境变量 {name}")
@@ -168,25 +205,68 @@ def build_context(documents: list[Document]) -> str:
     return "\n\n".join(parts)
 
 
+def choose_recommended_menu(question: str, sources: list[str]) -> RecommendedMenu:
+    """根据来源文件和问题内容，给出最小推荐菜单。"""
+    for source in sources:
+        if source in MENU_BY_SOURCE:
+            item = MENU_BY_SOURCE[source]
+            return RecommendedMenu(key=item["key"], title=item["title"], url=item["url"])
+
+    lowered_question = question.lower()
+    if "rag" in lowered_question:
+        item = MENU_BY_KEY["rag-basics"]
+    elif "agent" in lowered_question or "tool" in lowered_question:
+        item = MENU_BY_KEY["tool-agent-basics"]
+    else:
+        item = MENU_BY_KEY["langchain-basics"]
+
+    return RecommendedMenu(key=item["key"], title=item["title"], url=item["url"])
+
+
 @app.get("/")
 def read_root(request: Request):
-    """返回最小首页模板。"""
+    """返回首页模板和固定菜单。"""
     return templates.TemplateResponse(
         request=request,
         name="index.html",
-        context={"title": "multi-kb-rag-web"},
+        context={
+            "title": "multi-kb-rag-web",
+            "menus": MENU_ITEMS,
+        },
+    )
+
+
+@app.get("/menus/{menu_key}")
+def read_menu(request: Request, menu_key: str):
+    """返回单个菜单详情页。"""
+    menu = MENU_BY_KEY.get(menu_key)
+    if not menu:
+        raise HTTPException(status_code=404, detail="菜单不存在")
+
+    data_path = Path(__file__).resolve().parent.parent / "data" / menu["source"]
+    content = data_path.read_text(encoding="utf-8")
+    return templates.TemplateResponse(
+        request=request,
+        name="menu.html",
+        context={
+            "title": menu["title"],
+            "menu": menu,
+            "content": content,
+            "menus": MENU_ITEMS,
+        },
     )
 
 
 @app.post("/ask", response_model=AskResponse)
 def ask_question(payload: AskRequest) -> AskResponse:
-    """基于多文件知识库返回真实问答响应。"""
+    """基于多文件知识库返回问答结果，并给出推荐菜单。"""
     question = payload.question.strip()
     if not question:
         return AskResponse(
             question="",
             answer="问题不能为空。",
             sources=[],
+            recommended_menu=None,
         )
 
     kb_path = Path(__file__).resolve().parent.parent / "data"
@@ -202,15 +282,19 @@ def ask_question(payload: AskRequest) -> AskResponse:
     fused_results = fuse_results(bm25_results, vector_results)[:4]
     best_score = fused_results[0][1] if fused_results else 0.0
     if best_score < 0.35:
+        recommended_menu = choose_recommended_menu(question, [])
         return AskResponse(
             question=question,
             answer="当前知识库里没有找到和这个问题足够相关的内容。",
             sources=[],
+            recommended_menu=recommended_menu,
         )
 
     retrieved_docs = [document for document, _ in fused_results]
     context = build_context(retrieved_docs)
-    sources = list(dict.fromkeys(document.metadata.get("source", "unknown") for document in retrieved_docs))
+    sources = list(
+        dict.fromkeys(document.metadata.get("source", "unknown") for document in retrieved_docs)
+    )
 
     prompt = ChatPromptTemplate.from_messages(
         [
@@ -237,4 +321,5 @@ def ask_question(payload: AskRequest) -> AskResponse:
         question=question,
         answer=response.content,
         sources=sources,
+        recommended_menu=choose_recommended_menu(question, sources),
     )

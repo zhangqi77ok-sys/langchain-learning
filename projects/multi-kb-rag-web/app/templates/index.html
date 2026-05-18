@@ -13,21 +13,26 @@
         }
 
         .page {
-            max-width: 820px;
-            margin: 48px auto;
+            max-width: 980px;
+            margin: 40px auto;
             padding: 0 20px;
         }
 
-        .card {
+        .layout {
+            display: grid;
+            grid-template-columns: 260px 1fr;
+            gap: 24px;
+        }
+
+        .panel {
             background: #ffffff;
             border-radius: 18px;
-            padding: 32px;
+            padding: 24px;
             box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
         }
 
-        h1 {
+        h1, h2, h3 {
             margin-top: 0;
-            font-size: 32px;
         }
 
         p {
@@ -35,8 +40,29 @@
             color: #4b5563;
         }
 
-        .form {
-            margin-top: 24px;
+        .menu-list {
+            display: grid;
+            gap: 12px;
+        }
+
+        .menu-item {
+            display: block;
+            text-decoration: none;
+            color: #1f2937;
+            padding: 14px 16px;
+            border-radius: 12px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+        }
+
+        .menu-item strong {
+            display: block;
+            margin-bottom: 6px;
+        }
+
+        .menu-item span {
+            font-size: 14px;
+            color: #64748b;
         }
 
         textarea {
@@ -61,32 +87,77 @@
             cursor: pointer;
         }
 
+        .result-card {
+            margin-top: 28px;
+            padding: 18px;
+            background: #f8fafc;
+            border-radius: 12px;
+        }
+
         .hint {
             margin-top: 18px;
             font-size: 14px;
             color: #64748b;
         }
+
+        .recommend {
+            margin-top: 16px;
+            padding: 14px 16px;
+            background: #eff6ff;
+            border: 1px solid #bfdbfe;
+            border-radius: 12px;
+        }
+
+        .recommend a {
+            color: #1d4ed8;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        @media (max-width: 860px) {
+            .layout {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
 <body>
     <main class="page">
-        <section class="card">
-            <h1>多知识库问答 Web 项目</h1>
-            <p>这是项目的最小首页版本。当前页面先只提供 Web 骨架，下一步再接入真正的 RAG 问答接口。</p>
+        <div class="layout">
+            <aside class="panel">
+                <h2>学习菜单</h2>
+                <p>你可以直接点菜单看对应知识内容，也可以先提问，再根据推荐继续查看。</p>
+                <nav class="menu-list">
+                    {% for menu in menus %}
+                    <a class="menu-item" href="{{ menu.url }}">
+                        <strong>{{ menu.title }}</strong>
+                        <span>{{ menu.description }}</span>
+                    </a>
+                    {% endfor %}
+                </nav>
+            </aside>
 
-            <div class="form">
-                <textarea id="questionInput" placeholder="例如：RAG 的基本流程是什么？"></textarea>
-                <button id="askButton" type="button">提交问题</button>
-            </div>
+            <section class="panel">
+                <h1>多知识库问答 Web 项目</h1>
+                <p>当前版本已经支持页面问答、混合检索，以及回答后的菜单推荐。</p>
 
-            <div id="result" style="display:none; margin-top: 28px;">
-                <h2 style="font-size: 20px; margin-bottom: 12px;">回答结果</h2>
-                <div id="answerBox" style="padding: 18px; background: #f8fafc; border-radius: 12px; line-height: 1.8;"></div>
-                <div id="sourceBox" style="margin-top: 14px; font-size: 14px; color: #475569;"></div>
-            </div>
+                <div class="form">
+                    <textarea id="questionInput" placeholder="例如：RAG 的基本流程是什么？"></textarea>
+                    <button id="askButton" type="button">提交问题</button>
+                </div>
 
-            <p id="hint" class="hint">现在已经支持在页面里发问，下一步可以继续升级交互体验。</p>
-        </section>
+                <div id="result" style="display:none;">
+                    <div class="result-card">
+                        <h3>回答结果</h3>
+                        <div id="answerBox" style="line-height: 1.8;"></div>
+                        <div id="sourceBox" style="margin-top: 14px; font-size: 14px; color: #475569;"></div>
+                        <div id="recommendBox" class="recommend" style="display:none;"></div>
+                    </div>
+                </div>
+
+                <p id="hint" class="hint">现在你可以直接提问，系统会在回答后推荐你继续查看的菜单。</p>
+            </section>
+        </div>
     </main>
     <script>
         const button = document.getElementById("askButton");
@@ -94,6 +165,7 @@
         const result = document.getElementById("result");
         const answerBox = document.getElementById("answerBox");
         const sourceBox = document.getElementById("sourceBox");
+        const recommendBox = document.getElementById("recommendBox");
         const hint = document.getElementById("hint");
 
         button.addEventListener("click", async () => {
@@ -121,6 +193,15 @@
                 sourceBox.textContent = data.sources.length
                     ? `来源文件：${data.sources.join("、")}`
                     : "没有返回来源文件。";
+
+                if (data.recommended_menu) {
+                    recommendBox.style.display = "block";
+                    recommendBox.innerHTML = `推荐继续查看：<a href="${data.recommended_menu.url}">${data.recommended_menu.title}</a>`;
+                } else {
+                    recommendBox.style.display = "none";
+                    recommendBox.innerHTML = "";
+                }
+
                 result.style.display = "block";
                 hint.textContent = "问答完成。";
             } catch (error) {
