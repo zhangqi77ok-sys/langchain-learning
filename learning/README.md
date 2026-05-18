@@ -23,3 +23,4 @@
 - `learning/chapter-03-rag`
 - `learning/chapter-04-memory`
 - `learning/chapter-05-agents`
+- `learning/chapter-06-hybrid-retrieval`
