@@ -24,3 +24,4 @@
 - `learning/chapter-04-memory`
 - `learning/chapter-05-agents`
 - `learning/chapter-06-hybrid-retrieval`
+- `learning/chapter-07-langgraph`
