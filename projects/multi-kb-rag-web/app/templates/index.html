@@ -114,6 +114,12 @@
             font-weight: 600;
         }
 
+        .recommend-reason {
+            margin-top: 8px;
+            font-size: 14px;
+            color: #475569;
+        }
+
         @media (max-width: 860px) {
             .layout {
                 grid-template-columns: 1fr;
@@ -139,7 +145,7 @@
 
             <section class="panel">
                 <h1>多知识库问答 Web 项目</h1>
-                <p>当前版本已经支持页面问答、混合检索，以及回答后的菜单推荐。</p>
+                <p>当前版本已经支持页面问答、混合检索，以及回答后的菜单推荐和推荐原因。</p>
 
                 <div class="form">
                     <textarea id="questionInput" placeholder="例如：RAG 的基本流程是什么？"></textarea>
@@ -151,11 +157,14 @@
                         <h3>回答结果</h3>
                         <div id="answerBox" style="line-height: 1.8;"></div>
                         <div id="sourceBox" style="margin-top: 14px; font-size: 14px; color: #475569;"></div>
-                        <div id="recommendBox" class="recommend" style="display:none;"></div>
+                        <div id="recommendBox" class="recommend" style="display:none;">
+                            <div id="recommendLink"></div>
+                            <div id="recommendReason" class="recommend-reason"></div>
+                        </div>
                     </div>
                 </div>
 
-                <p id="hint" class="hint">现在你可以直接提问，系统会在回答后推荐你继续查看的菜单。</p>
+                <p id="hint" class="hint">现在你可以直接提问，系统会在回答后推荐你继续查看的菜单，并说明为什么推荐。</p>
             </section>
         </div>
     </main>
@@ -166,6 +175,8 @@
         const answerBox = document.getElementById("answerBox");
         const sourceBox = document.getElementById("sourceBox");
         const recommendBox = document.getElementById("recommendBox");
+        const recommendLink = document.getElementById("recommendLink");
+        const recommendReason = document.getElementById("recommendReason");
         const hint = document.getElementById("hint");
 
         button.addEventListener("click", async () => {
@@ -196,10 +207,12 @@
 
                 if (data.recommended_menu) {
                     recommendBox.style.display = "block";
-                    recommendBox.innerHTML = `推荐继续查看：<a href="${data.recommended_menu.url}">${data.recommended_menu.title}</a>`;
+                    recommendLink.innerHTML = `推荐继续查看：<a href="${data.recommended_menu.url}">${data.recommended_menu.title}</a>`;
+                    recommendReason.textContent = data.recommended_reason || "";
                 } else {
                     recommendBox.style.display = "none";
-                    recommendBox.innerHTML = "";
+                    recommendLink.innerHTML = "";
+                    recommendReason.textContent = "";
                 }
 
                 result.style.display = "block";

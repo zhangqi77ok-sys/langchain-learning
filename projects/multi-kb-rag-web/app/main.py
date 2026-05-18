@@ -70,6 +70,7 @@ class AskResponse(BaseModel):
     answer: str
     sources: list[str]
     recommended_menu: RecommendedMenu | None
+    recommended_reason: str | None
 
 
 def get_required_env(name: str) -> str:
@@ -223,6 +224,15 @@ def choose_recommended_menu(question: str, sources: list[str]) -> RecommendedMen
     return RecommendedMenu(key=item["key"], title=item["title"], url=item["url"])
 
 
+def build_recommended_reason(question: str, sources: list[str], recommended_menu: RecommendedMenu) -> str:
+    """生成推荐菜单的原因说明。"""
+    if sources:
+        first_source = sources[0]
+        return f"因为这次回答主要命中了 {first_source}，所以推荐你继续查看 {recommended_menu.title}。"
+
+    return f"因为当前没有命中足够相关的知识内容，所以先推荐你去 {recommended_menu.title} 看基础内容。"
+
+
 @app.get("/")
 def read_root(request: Request):
     """返回首页模板和固定菜单。"""
@@ -267,6 +277,7 @@ def ask_question(payload: AskRequest) -> AskResponse:
             answer="问题不能为空。",
             sources=[],
             recommended_menu=None,
+            recommended_reason=None,
         )
 
     kb_path = Path(__file__).resolve().parent.parent / "data"
@@ -281,6 +292,7 @@ def ask_question(payload: AskRequest) -> AskResponse:
     vector_results = run_vector_search(question, vector_store, top_k=4)
     fused_results = fuse_results(bm25_results, vector_results)[:4]
     best_score = fused_results[0][1] if fused_results else 0.0
+
     if best_score < 0.35:
         recommended_menu = choose_recommended_menu(question, [])
         return AskResponse(
@@ -288,6 +300,7 @@ def ask_question(payload: AskRequest) -> AskResponse:
             answer="当前知识库里没有找到和这个问题足够相关的内容。",
             sources=[],
             recommended_menu=recommended_menu,
+            recommended_reason=build_recommended_reason(question, [], recommended_menu),
         )
 
     retrieved_docs = [document for document, _ in fused_results]
@@ -317,9 +330,11 @@ def ask_question(payload: AskRequest) -> AskResponse:
     chain = prompt | model
     response = chain.invoke({"context": context, "question": question})
 
+    recommended_menu = choose_recommended_menu(question, sources)
     return AskResponse(
         question=question,
         answer=response.content,
         sources=sources,
-        recommended_menu=choose_recommended_menu(question, sources),
+        recommended_menu=recommended_menu,
+        recommended_reason=build_recommended_reason(question, sources, recommended_menu),
     )
