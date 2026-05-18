@@ -208,11 +208,16 @@ def build_context(documents: list[Document]) -> str:
 
 def choose_recommended_menu(question: str, sources: list[str]) -> RecommendedMenu:
     """根据来源文件和问题内容，给出最小推荐菜单。"""
+    # 第 1 层：如果已经知道这次回答主要命中了哪个知识文件，
+    # 就直接把“知识文件”映射到“对应菜单”。
     for source in sources:
         if source in MENU_BY_SOURCE:
             item = MENU_BY_SOURCE[source]
             return RecommendedMenu(key=item["key"], title=item["title"], url=item["url"])
 
+    # 第 2 层：如果没有明确命中的来源文件，
+    # 说明可能是拒答场景，或者当前来源不够稳定。
+    # 这时再根据问题里的关键词做一个最小兜底推荐。
     lowered_question = question.lower()
     if "rag" in lowered_question:
         item = MENU_BY_KEY["rag-basics"]
@@ -228,8 +233,11 @@ def build_recommended_reason(question: str, sources: list[str], recommended_menu
     """生成推荐菜单的原因说明。"""
     if sources:
         first_source = sources[0]
+        # 有命中来源时，原因直接解释成：
+        # “因为这次回答主要来自哪个知识文件，所以推荐对应菜单”。
         return f"因为这次回答主要命中了 {first_source}，所以推荐你继续查看 {recommended_menu.title}。"
 
+    # 没有命中来源时，明确告诉用户这是一个“基础兜底推荐”。
     return f"因为当前没有命中足够相关的知识内容，所以先推荐你去 {recommended_menu.title} 看基础内容。"
 
 
